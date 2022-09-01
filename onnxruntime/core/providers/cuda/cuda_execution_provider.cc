@@ -1,6 +1,6 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
-
+#include <fstream>
 #include "core/common/inlined_containers.h"
 #include "core/providers/shared_library/provider_api.h"
 #include "core/providers/cuda/cuda_execution_provider.h"
@@ -240,7 +240,11 @@ CUDAExecutionProvider::CUDAExecutionProvider(const CUDAExecutionProviderInfo& in
     } else if (info.enable_cuda_graph){
       // current cuda graph implementation only works with single stream
       // use EP level unified stream for all the reqeust
+      auto start = std::chrono::high_resolution_clock::now();
       CUDA_CALL_THROW(cudaStreamCreateWithFlags(&stream_, cudaStreamNonBlocking));
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start);
+      std::ofstream outfile("streamCreateDestroyPerf.txt", std::ios_base::app);
+      outfile << "stream Create with flag in constructor duration:" << duration.count() << std::endl;
       use_ep_level_unified_stream_ = true;
     }
     else {

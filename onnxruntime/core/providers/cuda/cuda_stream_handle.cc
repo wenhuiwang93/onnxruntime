@@ -1,6 +1,7 @@
 #include "core/providers/cuda/cuda_stream_handle.h"
 #include "core/providers/cuda/cuda_common.h"
 #include "core/common/spin_pause.h"
+#include <fstream>
 
 namespace onnxruntime {
 
@@ -51,9 +52,15 @@ CudaStream::CudaStream(cudaStream_t stream, const OrtDevice& device, bool own_fl
 
 CudaStream::~CudaStream() {
   if (own_stream_) {
-    if (handle)
+    if (handle) {
+      auto start = std::chrono::high_resolution_clock::now();
+           
       cudaStreamDestroy(static_cast<cudaStream_t>(handle));
 
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start);
+      std::ofstream outfile("streamCreateDestroyPerf.txt", std::ios_base::app);
+      outfile << "stream destroy duration:" << duration.count() << std::endl; 
+    }
     cublasDestroy(cublas_handle_);
     cudnnDestroy(cudnn_handle_);
   }
@@ -95,9 +102,13 @@ void RegisterCudaStreamHandles(IStreamCommandHandleRegistry& stream_handle_regis
   stream_handle_registry.RegisterWaitFn(device_type, OrtDevice::CPU, WaitCudaNotificationOnHost);
   if (!use_existing_stream)
     stream_handle_registry.RegisterCreateStreamFn(device_type, [](const OrtDevice& device) {
+      auto start = std::chrono::high_resolution_clock::now();
       cudaStream_t stream = nullptr;
-      // CUDA_CALL_THROW(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
-      CUDA_CALL_THROW(cudaStreamCreate(&stream));
+      CUDA_CALL_THROW(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking));
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start);
+      std::ofstream outfile("streamCreateDestroyPerf.txt", std::ios_base::app);
+      outfile << "stream Create with flag duration:" << duration.count() << std::endl;
+      //CUDA_CALL_THROW(cudaStreamCreate(&stream));
       return std::make_unique<CudaStream>(stream, device, true, nullptr, nullptr);
     });
   else
